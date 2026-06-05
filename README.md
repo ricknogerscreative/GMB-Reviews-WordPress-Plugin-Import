@@ -2,12 +2,23 @@
 
 Nightly WP-Cron sync of curated 4-5★ text reviews from Airtable into the `testimonial` CPT.
 
-## Config (wp-config.php — never commit values)
+## Config — credentials (never commit values)
 - `EDOA_AIRTABLE_PAT` — Airtable personal access token
 - `EDOA_AIRTABLE_BASE_ID` — `apprT9J3TtYkidSbl`
 
-In the EDOA Local env these are loaded automatically from `website/plugins/gmb-reviews/.env`
-(wp-config.php reads `AIRTABLE_PAT` / `AIRTABLE_BASE_ID` from that file — no duplication).
+Defined by an **mu-plugin** (`deploy/edoa-rs-config.php` → install to `wp-content/mu-plugins/`),
+NOT wp-config.php — survives Local's wp-config rewrites and keeps creds out of this repo.
+On Local it reads `AIRTABLE_PAT` / `AIRTABLE_BASE_ID` from `website/plugins/gmb-reviews/.env`.
+On prod/staging: define the two constants via host env, or edit the mu-plugin source.
+
+### WP-Cron note
+This Local site has `DISABLE_WP_CRON` set (`mu-plugins/disable-wp-cron.php`), so the daily
+event will NOT auto-fire here — use the manual "Run Sync Now" button, or run via WP-CLI.
+On prod, WP-Cron fires on traffic; for low-traffic sites add a real cron hitting `wp-cron.php`.
+
+### Dev: WP-CLI DB access
+Local's MySQL is socket-only (TCP root blocked). wp-config `DB_HOST` honors
+`EDOA_WP_DB_HOST`; `verify-live.sh` auto-detects the running socket and sets it.
 
 ## Behaviour
 - Filters reviews to Stars >= 4 with non-empty text.
