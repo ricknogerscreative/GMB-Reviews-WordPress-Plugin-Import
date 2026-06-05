@@ -1,17 +1,31 @@
 #!/bin/bash
 # Live verification for edoa-review-sync. Run AFTER starting the Local site (DB must be up).
-# Activates plugin, runs sync, spot-checks results, verifies cron.
+# Auto-detects Local's MySQL socket + binaries. Activates plugin, runs sync, spot-checks, verifies cron.
 set -e
 
 PHP=/Applications/Local.app/Contents/Resources/extraResources/lightning-services/php-8.2.29+0/bin/darwin-arm64/bin/php
 WPCLI=/tmp/wp-cli.phar
 ROOT=/Users/ricknogers/ClaudeCode/Projects/EDOA/website/local-env/app/public
-wp() { "$PHP" "$WPCLI" --path="$ROOT" "$@"; }
 
 [ -f "$WPCLI" ] || curl -sS -o "$WPCLI" https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar
 
+# Discover the running Local MySQL socket (run-id changes per restart).
+SOCK="$(ps aux | grep -i "[m]ysqld" | tr ' ' '\n' | grep -E "socket=" | head -1 | sed 's/^socket=//')"
+if [ -z "$SOCK" ]; then
+  SOCK="$(find "$HOME/Library/Application Support/Local/run" -name mysqld.sock 2>/dev/null | head -1)"
+fi
+[ -n "$SOCK" ] || { echo "FATAL: no running Local MySQL socket found — is the site started?"; exit 1; }
+echo "Using socket: $SOCK"
+
+# DB_HOST override (wp-config honors EDOA_WP_DB_HOST). Add Local's mysql client to PATH for db subcommands.
+export EDOA_WP_DB_HOST="localhost:${SOCK}"
+MYSQLBIN="$(dirname "$(find "$HOME/Library/Application Support/Local/lightning-services" -path "*/bin/darwin-arm64/bin/mysql" 2>/dev/null | head -1)")"
+[ -n "$MYSQLBIN" ] && export PATH="$MYSQLBIN:$PATH"
+
+wp() { "$PHP" "$WPCLI" --path="$ROOT" "$@"; }
+
 echo "== DB connectivity =="
-wp core is-installed && echo "DB OK"
+wp eval 'global $wpdb; echo $wpdb->get_var("SELECT 1") === "1" ? "DB OK".PHP_EOL : "DB FAIL".PHP_EOL;'
 
 echo "== Airtable constants loaded? =="
 wp eval 'echo "PAT="  . ( defined("EDOA_AIRTABLE_PAT")     && EDOA_AIRTABLE_PAT     ? "set" : "MISSING" ) . PHP_EOL;
@@ -24,9 +38,8 @@ echo "== Run sync =="
 wp eval 'print_r( ( new EDOA_Review_Sync() )->run() );'
 
 echo "== Counts =="
-wp eval 'echo "testimonials total: " . wp_count_posts("testimonial")->publish . PHP_EOL;'
-wp post list --post_type=testimonial --meta_key=_edoa_is_best_overall --meta_value=1 --format=count --posts_per_page=-1 \
-  | xargs -I{} echo "best-overall flagged: {}"
+wp eval 'echo "testimonials total (publish): " . wp_count_posts("testimonial")->publish . PHP_EOL;'
+wp eval '$n=get_posts(["post_type"=>"testimonial","numberposts"=>-1,"fields"=>"ids","meta_key"=>"_edoa_is_best_overall","meta_value"=>1]); echo "best-overall flagged: ".count($n).PHP_EOL;'
 
 echo "== Spot-check one synced post =="
 wp eval '$p = get_posts(["post_type"=>"testimonial","numberposts"=>1,"meta_key"=>"_edoa_airtable_id"]);
@@ -34,10 +47,16 @@ wp eval '$p = get_posts(["post_type"=>"testimonial","numberposts"=>1,"meta_key"=
            echo "rating="    . get_post_meta($id,"testimonial_rating",true) . PHP_EOL;
            echo "loc_id="    . get_post_meta($id,"_edoa_location_id",true) . PHP_EOL;
            echo "loc_name="  . get_post_meta($id,"_edoa_location_name",true) . PHP_EOL;
-           echo "quote_len=" . strlen(get_post_meta($id,"testimonial_quote",true)) . PHP_EOL;
+           echo "quote_len=" . strlen((string)get_post_meta($id,"testimonial_quote",true)) . PHP_EOL;
+           echo "svc_ids="   . wp_json_encode(get_post_meta($id,"_edoa_service_ids",true)) . PHP_EOL;
          } else { echo "NO synced posts found" . PHP_EOL; }'
 
+echo "== Location-match coverage =="
+wp eval '$all=get_posts(["post_type"=>"testimonial","numberposts"=>-1,"fields"=>"ids","meta_key"=>"_edoa_airtable_id"]);
+         $matched=0; foreach($all as $id){ if((int)get_post_meta($id,"_edoa_location_id",true)>0) $matched++; }
+         echo "matched ".$matched." / ".count($all)." synced posts to a location".PHP_EOL;'
+
 echo "== Cron scheduled? =="
-wp cron event list --fields=hook,next_run | grep edoa_rs_daily_sync || echo "cron NOT scheduled (re-activate plugin)"
+wp cron event list --fields=hook,next_run 2>/dev/null | grep edoa_rs_daily_sync || echo "cron NOT scheduled (re-activate plugin)"
 
 echo "== Done =="

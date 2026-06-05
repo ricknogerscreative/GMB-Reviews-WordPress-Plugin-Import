@@ -12,6 +12,15 @@ class EDOA_Review_Sync {
 	const PER_LOCATION        = 15;
 	const BEST_OVERALL        = 30;
 
+	/** Trim whitespace from Airtable field keys (some columns have stray leading/trailing spaces). */
+	private static function trim_keys( array $fields ): array {
+		$out = array();
+		foreach ( $fields as $k => $v ) {
+			$out[ trim( $k ) ] = $v;
+		}
+		return $out;
+	}
+
 	public function run(): array {
 		$client = new EDOA_Airtable_Client();
 		if ( ! $client->is_configured() ) {
@@ -22,7 +31,7 @@ class EDOA_Review_Sync {
 		$locRecords = $client->fetch_all( 'Locations' );
 		$locById    = array();
 		foreach ( $locRecords as $rec ) {
-			$f = $rec['fields'] ?? array();
+			$f = self::trim_keys( $rec['fields'] ?? array() );
 			$locById[ $rec['id'] ] = array(
 				'city'  => $f['City'] ?? '',
 				'state' => $f['State'] ?? '',
@@ -34,7 +43,7 @@ class EDOA_Review_Sync {
 		$raw = $client->fetch_all( 'Reviews' );
 		$reviews = array();
 		foreach ( $raw as $rec ) {
-			$f       = $rec['fields'] ?? array();
+			$f       = self::trim_keys( $rec['fields'] ?? array() );
 			$linkIds = $f['Location'] ?? array();
 			$locKey  = is_array( $linkIds ) && $linkIds ? $linkIds[0] : '';
 			$reviews[] = array(
