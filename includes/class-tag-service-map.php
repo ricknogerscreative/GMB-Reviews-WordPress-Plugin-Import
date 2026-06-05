@@ -6,11 +6,13 @@ if ( ! defined( 'ABSPATH' ) && ! defined( 'EDOA_RS_TEST' ) ) {
 
 class EDOA_Tag_Service_Map {
 
+	// Maps Airtable review tags to actual `service` CPT post slugs.
 	const MAP = array(
-		'emergency'   => array( 'emergency-pain-relief', 'emergency-dental-exam' ),
-		'staff'       => array( 'comprehensive-dental-exam' ),
-		'wait_time'   => array( 'emergency-pain-relief' ),
-		'cleanliness' => array( 'comprehensive-dental-exam' ),
+		'emergency'   => array( 'emergency' ),          // Emergency Treatment
+		'staff'       => array( 'comprehensive-exam' ), // general positive -> Comprehensive Exam
+		'wait_time'   => array( 'emergency' ),          // wait time relates to emergency care
+		'cleanliness' => array( 'comprehensive-exam' ),
+		// 'pricing' and 'insurance' have no matching service CPT entry.
 	);
 
 	/**

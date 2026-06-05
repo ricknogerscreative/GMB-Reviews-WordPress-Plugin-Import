@@ -7,15 +7,17 @@ function check( $cond, $msg, &$fail ) { if ( ! $cond ) { echo "FAIL: $msg\n"; $f
 
 // emergency maps to two slugs
 $slugs = EDOA_Tag_Service_Map::slugs_for_tags( ['emergency'] );
-check( in_array( 'emergency-pain-relief', $slugs, true ), 'emergency -> emergency-pain-relief', $fail );
-check( in_array( 'emergency-dental-exam', $slugs, true ), 'emergency -> emergency-dental-exam', $fail );
+check( $slugs === ['emergency'], 'emergency -> emergency', $fail );
+
+// emergency + wait_time both map to emergency, deduped
+check( EDOA_Tag_Service_Map::slugs_for_tags( ['emergency','wait_time'] ) === ['emergency'], 'emergency+wait_time dedup to emergency', $fail );
 
 // pricing/insurance map to nothing
 check( EDOA_Tag_Service_Map::slugs_for_tags( ['pricing','insurance'] ) === [], 'pricing/insurance -> []', $fail );
 
 // dedup across multiple tags
 $slugs2 = EDOA_Tag_Service_Map::slugs_for_tags( ['staff','cleanliness'] );
-check( $slugs2 === ['comprehensive-dental-exam'], 'staff+cleanliness dedup to single slug', $fail );
+check( $slugs2 === ['comprehensive-exam'], 'staff+cleanliness dedup to single slug', $fail );
 
 // unknown tag ignored
 check( EDOA_Tag_Service_Map::slugs_for_tags( ['nonsense'] ) === [], 'unknown tag -> []', $fail );
