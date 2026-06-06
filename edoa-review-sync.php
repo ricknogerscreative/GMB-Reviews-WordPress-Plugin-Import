@@ -20,6 +20,7 @@ require_once EDOA_RS_DIR . 'includes/class-location-matcher.php';
 require_once EDOA_RS_DIR . 'includes/class-review-ranker.php';
 require_once EDOA_RS_DIR . 'includes/class-review-sync.php';
 require_once EDOA_RS_DIR . 'includes/class-admin-page.php';
+require_once EDOA_RS_DIR . 'includes/class-taxonomies.php';
 
 // Cron schedule on activation.
 register_activation_hook( __FILE__, function () {
@@ -28,6 +29,8 @@ register_activation_hook( __FILE__, function () {
 		$ts = strtotime( 'tomorrow 3:00am' );
 		wp_schedule_event( $ts, 'daily', EDOA_RS_CRON_HOOK );
 	}
+	EDOA_RS_Taxonomies::seed_terms();
+	flush_rewrite_rules();
 } );
 
 register_deactivation_hook( __FILE__, function () {
@@ -41,6 +44,8 @@ register_deactivation_hook( __FILE__, function () {
 add_action( EDOA_RS_CRON_HOOK, function () {
 	( new EDOA_Review_Sync() )->run();
 } );
+
+add_action( 'init', array( 'EDOA_RS_Taxonomies', 'register' ) );
 
 // Admin page + manual trigger.
 add_action( 'init', function () {
