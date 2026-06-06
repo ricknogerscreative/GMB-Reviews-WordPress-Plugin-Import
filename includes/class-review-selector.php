@@ -23,6 +23,11 @@ class EDOA_Review_Selector {
 	public static function select( array $reviews, array $quotas = array() ): array {
 		$q = array_merge( self::DEFAULT_QUOTAS, $quotas );
 
+		// Filter out reviews without a usable id — they cannot be keyed safely.
+		$reviews = array_values( array_filter( $reviews, static function ( $r ) {
+			return isset( $r['id'] ) && '' !== (string) $r['id'];
+		} ) );
+
 		// Rank: value DESC, then date DESC, then id ASC (fully deterministic).
 		usort( $reviews, static function ( $a, $b ) {
 			if ( (float) $a['value'] !== (float) $b['value'] ) {

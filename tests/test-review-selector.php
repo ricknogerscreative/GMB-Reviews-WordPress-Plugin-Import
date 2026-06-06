@@ -34,6 +34,7 @@ $best = $out['best_ids'];
 
 // A4/A5 are pure-location overflow past per_location=2 and carry no topic/service → dropped.
 check( ! isset( $keep['A5'] ), 'A5 dropped (location quota full, no topic/service)', $fail );
+check( ! isset( $keep['A4'] ), 'A4 dropped (location quota full, no topic/service)', $fail );
 // A1 kept (top location + financing + root-canals + best).
 check( isset( $keep['A1'] ), 'A1 kept', $fail );
 // A3 kept via per-location emergency topic even though per_location(2) filled by A1,A2.
