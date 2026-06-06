@@ -3,16 +3,19 @@
 
 class EDOA_Review_Sync {
 
-	const META_AIRTABLE_ID    = '_edoa_airtable_id';
-	const META_LOCATION_ID    = '_edoa_location_id';
-	const META_LOCATION_NAME  = '_edoa_location_name';
-	const META_SERVICE_IDS    = '_edoa_service_ids';
-	const META_TAGS           = '_edoa_tags';
-	const META_BEST_OVERALL   = '_edoa_is_best_overall';
-	const PER_LOCATION        = 15;
-	const BEST_OVERALL        = 30;
+	const META_AIRTABLE_ID   = '_edoa_airtable_id';
+	const META_LOCATION_ID   = '_edoa_location_id';
+	const META_LOCATION_NAME = '_edoa_location_name';
+	const META_VALUE_SCORE   = '_edoa_value_score';
+	const META_BEST_OVERALL  = '_edoa_is_best_overall';
 
-	/** Trim whitespace from Airtable field keys (some columns have stray leading/trailing spaces). */
+	// Legacy meta removed by v2 — stripped from existing posts on upsert.
+	const LEGACY_META = array( '_edoa_service_ids', '_edoa_tags' );
+
+	/** Cap on Airtable rows fetched (sorted by Value Score DESC — top-value first). */
+	const FETCH_MAX = 5000;
+
+	/** Trim whitespace from Airtable field keys (defensive — restructure fixed stray spaces). */
 	private static function trim_keys( array $fields ): array {
 		$out = array();
 		foreach ( $fields as $k => $v ) {
@@ -27,10 +30,9 @@ class EDOA_Review_Sync {
 			return array( 'ok' => false, 'message' => 'Airtable not configured (EDOA_AIRTABLE_PAT / EDOA_AIRTABLE_BASE_ID).' );
 		}
 
-		// 1. Build Airtable location-record-id => [city,state,name]
-		$locRecords = $client->fetch_all( 'Locations' );
-		$locById    = array();
-		foreach ( $locRecords as $rec ) {
+		// 1. Airtable location-record-id => [city,state,name].
+		$locById = array();
+		foreach ( $client->fetch_all( 'Locations' ) as $rec ) {
 			$f = self::trim_keys( $rec['fields'] ?? array() );
 			$locById[ $rec['id'] ] = array(
 				'city'  => $f['City'] ?? '',
@@ -39,8 +41,13 @@ class EDOA_Review_Sync {
 			);
 		}
 
-		// 2. Fetch reviews, normalize to flat shape for the ranker.
-		$raw = $client->fetch_all( 'Reviews' );
+		// 2. Fetch Display-Ready reviews, sorted by Value Score DESC, capped.
+		$params = array(
+			'filterByFormula' => '{Display Ready}',
+			'maxRecords'      => self::FETCH_MAX,
+			'sort'            => array( array( 'field' => 'Value Score', 'direction' => 'desc' ) ),
+		);
+		$raw     = $client->fetch_all( 'Reviews', $params );
 		$reviews = array();
 		foreach ( $raw as $rec ) {
 			$f       = self::trim_keys( $rec['fields'] ?? array() );
@@ -49,49 +56,39 @@ class EDOA_Review_Sync {
 			$reviews[] = array(
 				'id'           => (string) ( $f['Review ID'] ?? $rec['id'] ),
 				'stars'        => (int) ( $f['Stars'] ?? 0 ),
-				'text'         => (string) ( $f['Review Text'] ?? '' ),
-				'author'       => (string) ( $f['Reviewer'] ?? '' ),
+				'value'        => (float) ( $f['Value Score'] ?? 0 ),
 				'date'         => (string) ( $f['Review Date'] ?? '' ),
-				'tags'         => is_array( $f['Tags'] ?? null ) ? $f['Tags'] : array(),
+				'display_text' => (string) ( $f['Display Text'] ?? '' ),
+				'reviewer'     => (string) ( $f['Reviewer Display'] ?? '' ),
+				'topics'       => array_values( array_filter( (array) ( $f['Topics'] ?? array() ) ) ),
+				'services'     => array_values( array_filter( (array) ( $f['Services'] ?? array() ) ) ),
 				'location_key' => $locKey,
 			);
 		}
 
-		// 3. Rank.
-		$qualifying = EDOA_Review_Ranker::filter_qualifying( $reviews );
-		$perLoc     = EDOA_Review_Ranker::top_per_location( $qualifying, self::PER_LOCATION );
-		$best       = EDOA_Review_Ranker::best_overall( $qualifying, self::BEST_OVERALL );
+		// 3. Quota selection (selector needs id,value,date,location_key,topics,services).
+		$sel  = EDOA_Review_Selector::select( $reviews );
+		$keep = $sel['keep'];
+		$best = $sel['best_ids'];
 
-		$bestIds = array();
-		foreach ( $best as $r ) {
-			$bestIds[ $r['id'] ] = true;
+		// Index full review rows by id so upsert has display_text/reviewer/stars.
+		$byId = array();
+		foreach ( $reviews as $r ) {
+			$byId[ $r['id'] ] = $r;
 		}
 
-		// 4. Flatten the final keep-set (union of per-location top15 + best-overall).
-		$keep = array();
-		foreach ( $perLoc as $list ) {
-			foreach ( $list as $r ) {
-				$keep[ $r['id'] ] = $r;
-			}
-		}
-		foreach ( $best as $r ) {
-			$keep[ $r['id'] ] = $r;
-		}
-
-		// 5. Upsert.
-		$matcher    = new EDOA_Location_Matcher();
-		$syncedIds  = array();
-		foreach ( $keep as $r ) {
-			$loc        = $locById[ $r['location_key'] ] ?? array( 'city' => '', 'state' => '', 'name' => '' );
-			$locPostId  = $matcher->match( $loc['city'], $loc['state'] );
-			$serviceIds = EDOA_Tag_Service_Map::ids_for_slugs(
-				EDOA_Tag_Service_Map::slugs_for_tags( $r['tags'] )
-			);
-			$this->upsert( $r, $locPostId, $loc['name'], $serviceIds, isset( $bestIds[ $r['id'] ] ) );
-			$syncedIds[] = $r['id'];
+		// 4. Upsert union.
+		$matcher   = new EDOA_Location_Matcher();
+		$syncedIds = array();
+		foreach ( $keep as $id => $_kept ) {
+			$r         = $byId[ $id ];
+			$loc       = $locById[ $r['location_key'] ] ?? array( 'city' => '', 'state' => '', 'name' => '' );
+			$locPostId = $matcher->match( $loc['city'], $loc['state'] );
+			$this->upsert( $r, $locPostId, $loc['name'], isset( $best[ $id ] ) );
+			$syncedIds[] = $id;
 		}
 
-		// 6. Cleanup stale.
+		// 5. Cleanup stale.
 		$deleted = $this->cleanup( $syncedIds );
 
 		return array(
@@ -102,7 +99,7 @@ class EDOA_Review_Sync {
 		);
 	}
 
-	private function upsert( array $r, int $locPostId, string $locName, array $serviceIds, bool $isBest ): void {
+	private function upsert( array $r, int $locPostId, string $locName, bool $isBest ): void {
 		$existing = get_posts( array(
 			'post_type'   => 'testimonial',
 			'post_status' => 'any',
@@ -116,8 +113,16 @@ class EDOA_Review_Sync {
 		$postarr = array(
 			'post_type'   => 'testimonial',
 			'post_status' => 'publish',
-			'post_title'  => $r['author'] !== '' ? $r['author'] : ( 'Review ' . $r['id'] ),
+			'post_title'  => $r['reviewer'] !== '' ? $r['reviewer'] : ( 'Review ' . $r['id'] ),
 		);
+		// Use Review Date as post_date so orderby=date reflects recency (indexed, no meta sort).
+		if ( $r['date'] !== '' ) {
+			$ts = strtotime( $r['date'] );
+			if ( $ts ) {
+				$postarr['post_date']     = gmdate( 'Y-m-d H:i:s', $ts );
+				$postarr['post_date_gmt'] = gmdate( 'Y-m-d H:i:s', $ts );
+			}
+		}
 		if ( $postId ) {
 			$postarr['ID'] = $postId;
 			wp_update_post( $postarr );
@@ -128,9 +133,9 @@ class EDOA_Review_Sync {
 			return;
 		}
 
-		// ACF/display fields (reuse existing testimonial ACF field names).
-		update_post_meta( $postId, 'testimonial_quote', $r['text'] );
-		update_post_meta( $postId, 'testimonial_author', $r['author'] );
+		// Display fields (reuse existing testimonial ACF field names).
+		update_post_meta( $postId, 'testimonial_quote', $r['display_text'] );
+		update_post_meta( $postId, 'testimonial_author', $r['reviewer'] );
 		update_post_meta( $postId, 'testimonial_rating', $r['stars'] );
 		if ( $locPostId ) {
 			update_post_meta( $postId, 'testimonial_location', $locPostId );
@@ -140,12 +145,20 @@ class EDOA_Review_Sync {
 		update_post_meta( $postId, self::META_AIRTABLE_ID, $r['id'] );
 		update_post_meta( $postId, self::META_LOCATION_ID, $locPostId );
 		update_post_meta( $postId, self::META_LOCATION_NAME, $locName );
-		update_post_meta( $postId, self::META_SERVICE_IDS, $serviceIds );
-		update_post_meta( $postId, self::META_TAGS, $r['tags'] );
+		update_post_meta( $postId, self::META_VALUE_SCORE, $r['value'] );
 		update_post_meta( $postId, self::META_BEST_OVERALL, $isBest ? 1 : 0 );
+
+		// Taxonomies (terms auto-created if missing; we restrict to known vocab on the term seed).
+		wp_set_object_terms( $postId, $r['topics'], EDOA_RS_Taxonomies::TAX_TOPIC, false );
+		wp_set_object_terms( $postId, $r['services'], EDOA_RS_Taxonomies::TAX_SERVICE, false );
+
+		// Strip retired legacy meta from previously-synced posts.
+		foreach ( self::LEGACY_META as $mk ) {
+			delete_post_meta( $postId, $mk );
+		}
 	}
 
-	/** Delete testimonial posts (origin=sync) whose Airtable ID is no longer kept. */
+	/** Delete synced testimonial posts whose Airtable ID is no longer kept. */
 	private function cleanup( array $keepIds ): int {
 		$keep = array_fill_keys( $keepIds, true );
 		$all  = get_posts( array(

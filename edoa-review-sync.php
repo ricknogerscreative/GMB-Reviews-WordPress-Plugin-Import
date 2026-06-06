@@ -14,10 +14,9 @@ define( 'EDOA_RS_VERSION', '1.0.0' );
 define( 'EDOA_RS_DIR', plugin_dir_path( __FILE__ ) );
 define( 'EDOA_RS_CRON_HOOK', 'edoa_rs_daily_sync' );
 
-require_once EDOA_RS_DIR . 'includes/class-tag-service-map.php';
 require_once EDOA_RS_DIR . 'includes/class-airtable-client.php';
 require_once EDOA_RS_DIR . 'includes/class-location-matcher.php';
-require_once EDOA_RS_DIR . 'includes/class-review-ranker.php';
+require_once EDOA_RS_DIR . 'includes/class-review-selector.php';
 require_once EDOA_RS_DIR . 'includes/class-review-sync.php';
 require_once EDOA_RS_DIR . 'includes/class-admin-page.php';
 require_once EDOA_RS_DIR . 'includes/class-taxonomies.php';
