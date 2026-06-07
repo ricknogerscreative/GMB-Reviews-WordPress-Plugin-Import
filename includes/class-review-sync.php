@@ -77,6 +77,22 @@ class EDOA_Review_Sync {
 			$byId[ $r['id'] ] = $r;
 		}
 
+		// Pre-load existing synced posts once (airtable_id => post_id) to avoid an N+1 lookup per upsert.
+		$postIdByAirtableId = array();
+		$existingIds = get_posts( array(
+			'post_type'   => 'testimonial',
+			'post_status' => 'any',
+			'numberposts' => -1,
+			'fields'      => 'ids',
+			'meta_key'    => self::META_AIRTABLE_ID,
+		) );
+		foreach ( $existingIds as $pid ) {
+			$aid = (string) get_post_meta( $pid, self::META_AIRTABLE_ID, true );
+			if ( '' !== $aid ) {
+				$postIdByAirtableId[ $aid ] = (int) $pid;
+			}
+		}
+
 		// 4. Upsert union.
 		$matcher   = new EDOA_Location_Matcher();
 		$syncedIds = array();
@@ -84,12 +100,12 @@ class EDOA_Review_Sync {
 			$r         = $byId[ $id ];
 			$loc       = $locById[ $r['location_key'] ] ?? array( 'city' => '', 'state' => '', 'name' => '' );
 			$locPostId = $matcher->match( $loc['city'], $loc['state'] );
-			$this->upsert( $r, $locPostId, $loc['name'], isset( $best[ $id ] ) );
+			$this->upsert( $r, $locPostId, $loc['name'], isset( $best[ $id ] ), $postIdByAirtableId[ $id ] ?? 0 );
 			$syncedIds[] = $id;
 		}
 
 		// 5. Cleanup stale.
-		$deleted = $this->cleanup( $syncedIds );
+		$deleted = $this->cleanup( $syncedIds, $postIdByAirtableId );
 
 		return array(
 			'ok'      => true,
@@ -99,16 +115,7 @@ class EDOA_Review_Sync {
 		);
 	}
 
-	private function upsert( array $r, int $locPostId, string $locName, bool $isBest ): void {
-		$existing = get_posts( array(
-			'post_type'   => 'testimonial',
-			'post_status' => 'any',
-			'numberposts' => 1,
-			'fields'      => 'ids',
-			'meta_key'    => self::META_AIRTABLE_ID,
-			'meta_value'  => $r['id'],
-		) );
-		$postId = $existing ? (int) $existing[0] : 0;
+	private function upsert( array $r, int $locPostId, string $locName, bool $isBest, int $postId ): void {
 
 		$postarr = array(
 			'post_type'   => 'testimonial',
@@ -119,6 +126,7 @@ class EDOA_Review_Sync {
 		if ( $r['date'] !== '' ) {
 			$ts = strtotime( $r['date'] );
 			if ( $ts ) {
+				$ts = min( $ts, time() ); // never future-date a published testimonial (would become status 'future')
 				$postarr['post_date']     = gmdate( 'Y-m-d H:i:s', $ts );
 				$postarr['post_date_gmt'] = gmdate( 'Y-m-d H:i:s', $ts );
 			}
@@ -148,9 +156,14 @@ class EDOA_Review_Sync {
 		update_post_meta( $postId, self::META_VALUE_SCORE, $r['value'] );
 		update_post_meta( $postId, self::META_BEST_OVERALL, $isBest ? 1 : 0 );
 
-		// Taxonomies (terms auto-created if missing; we restrict to known vocab on the term seed).
-		wp_set_object_terms( $postId, $r['topics'], EDOA_RS_Taxonomies::TAX_TOPIC, false );
-		wp_set_object_terms( $postId, $r['services'], EDOA_RS_Taxonomies::TAX_SERVICE, false );
+		// Taxonomies — restrict to the known controlled vocabulary so an unexpected
+		// Airtable value can't silently create an orphan term.
+		$allowed_topics   = array_flip( EDOA_RS_Taxonomies::TOPICS );
+		$allowed_services = array_flip( EDOA_RS_Taxonomies::SERVICES );
+		$topics   = array_values( array_filter( $r['topics'], static function ( $t ) use ( $allowed_topics ) { return isset( $allowed_topics[ $t ] ); } ) );
+		$services = array_values( array_filter( $r['services'], static function ( $s ) use ( $allowed_services ) { return isset( $allowed_services[ $s ] ); } ) );
+		wp_set_object_terms( $postId, $topics, EDOA_RS_Taxonomies::TAX_TOPIC, false );
+		wp_set_object_terms( $postId, $services, EDOA_RS_Taxonomies::TAX_SERVICE, false );
 
 		// Strip retired legacy meta from previously-synced posts.
 		foreach ( self::LEGACY_META as $mk ) {
@@ -158,22 +171,12 @@ class EDOA_Review_Sync {
 		}
 	}
 
-	/** Delete synced testimonial posts whose Airtable ID is no longer kept. */
-	private function cleanup( array $keepIds ): int {
-		$keep = array_fill_keys( $keepIds, true );
-		$all  = get_posts( array(
-			'post_type'   => 'testimonial',
-			'post_status' => 'any',
-			'numberposts' => -1,
-			'fields'      => 'ids',
-			'meta_query'  => array(
-				array( 'key' => self::META_AIRTABLE_ID, 'compare' => 'EXISTS' ),
-			),
-		) );
+	/** Delete previously-synced testimonial posts whose Airtable ID is no longer kept. */
+	private function cleanup( array $keepIds, array $postIdByAirtableId ): int {
+		$keep    = array_fill_keys( $keepIds, true );
 		$deleted = 0;
-		foreach ( $all as $pid ) {
-			$aid = (string) get_post_meta( $pid, self::META_AIRTABLE_ID, true );
-			if ( $aid !== '' && ! isset( $keep[ $aid ] ) ) {
+		foreach ( $postIdByAirtableId as $aid => $pid ) {
+			if ( ! isset( $keep[ $aid ] ) ) {
 				wp_delete_post( $pid, true );
 				$deleted++;
 			}
