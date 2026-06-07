@@ -1,0 +1,15 @@
+.edoa-tt__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1.5rem; }
+.edoa-tt__card { display: flex; flex-direction: column; gap: .75rem; padding: 1.5rem; background: #fff; border-radius: .75rem; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+.edoa-tt__quote { margin: 0; }
+.edoa-tt__text {
+	margin: 0;
+	display: -webkit-box;
+	-webkit-line-clamp: var(--edoa-tt-lines, 8);
+	line-clamp: var(--edoa-tt-lines, 8);
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+}
+.edoa-tt__card.is-expanded .edoa-tt__text { -webkit-line-clamp: unset; line-clamp: unset; overflow: visible; }
+.edoa-tt__more { align-self: flex-start; background: none; border: 0; padding: 0; color: #CC2229; font: inherit; cursor: pointer; text-decoration: underline; }
+.edoa-tt__footer { margin-top: auto; display: flex; align-items: center; justify-content: space-between; gap: .75rem; }
+.edoa-tt__author { font-style: normal; font-weight: 600; }

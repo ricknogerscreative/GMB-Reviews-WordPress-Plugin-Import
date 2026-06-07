@@ -13,6 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 define( 'EDOA_RS_VERSION', '1.0.0' );
 define( 'EDOA_RS_DIR', plugin_dir_path( __FILE__ ) );
 define( 'EDOA_RS_CRON_HOOK', 'edoa_rs_daily_sync' );
+define( 'EDOA_RS_PLUGIN_FILE', __FILE__ );
 
 require_once EDOA_RS_DIR . 'includes/class-airtable-client.php';
 require_once EDOA_RS_DIR . 'includes/class-location-matcher.php';
@@ -20,6 +21,7 @@ require_once EDOA_RS_DIR . 'includes/class-review-selector.php';
 require_once EDOA_RS_DIR . 'includes/class-review-sync.php';
 require_once EDOA_RS_DIR . 'includes/class-admin-page.php';
 require_once EDOA_RS_DIR . 'includes/class-taxonomies.php';
+require_once EDOA_RS_DIR . 'includes/class-testimonials-renderer.php';
 
 // Cron schedule on activation.
 register_activation_hook( __FILE__, function () {
@@ -52,3 +54,21 @@ add_action( 'init', function () {
 		( new EDOA_RS_Admin_Page() )->init();
 	}
 } );
+
+add_action( 'init', function () {
+	add_shortcode( 'edoa_testimonials', array( 'EDOA_Testimonials_Renderer', 'shortcode' ) );
+} );
+add_action( 'wp_enqueue_scripts', array( 'EDOA_Testimonials_Renderer', 'register_assets' ) );
+
+if ( ! function_exists( 'edoa_testimonials_render' ) ) {
+	/** @param array $args see EDOA_Testimonials_Renderer::render */
+	function edoa_testimonials_render( array $args = array() ): string {
+		return class_exists( 'EDOA_Testimonials_Renderer' ) ? EDOA_Testimonials_Renderer::render( $args ) : '';
+	}
+}
+if ( ! function_exists( 'edoa_testimonials_get' ) ) {
+	/** @param array $args see EDOA_Testimonials_Renderer::get @return int[] */
+	function edoa_testimonials_get( array $args = array() ): array {
+		return class_exists( 'EDOA_Testimonials_Renderer' ) ? EDOA_Testimonials_Renderer::get( $args ) : array();
+	}
+}
