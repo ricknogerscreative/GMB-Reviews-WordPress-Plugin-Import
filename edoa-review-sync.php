@@ -55,9 +55,7 @@ add_action( 'init', function () {
 	}
 } );
 
-add_action( 'init', function () {
-	add_shortcode( 'edoa_testimonials', array( 'EDOA_Testimonials_Renderer', 'shortcode' ) );
-} );
+add_shortcode( 'edoa_testimonials', array( 'EDOA_Testimonials_Renderer', 'shortcode' ) );
 add_action( 'wp_enqueue_scripts', array( 'EDOA_Testimonials_Renderer', 'register_assets' ) );
 
 if ( ! function_exists( 'edoa_testimonials_render' ) ) {

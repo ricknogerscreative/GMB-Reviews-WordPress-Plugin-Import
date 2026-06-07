@@ -14,6 +14,11 @@
 			});
 		});
 	}
-	if (document.readyState !== 'loading') { init(); }
-	else { document.addEventListener('DOMContentLoaded', init); }
+	if (document.fonts && document.fonts.ready) {
+		document.fonts.ready.then(init);
+	} else if (document.readyState !== 'loading') {
+		init();
+	} else {
+		document.addEventListener('DOMContentLoaded', init);
+	}
 })();

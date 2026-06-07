@@ -63,15 +63,19 @@ class EDOA_Testimonials_Renderer {
 
 		switch ( $source ) {
 			case 'recent':
-				// no filter
+				// No filter — all published testimonials, ordered by date below.
 				break;
 			case 'value':
+				// No filter — all published testimonials, ordered by value score below.
 				break;
 			case 'best':
 				$query['meta_query'] = array( array( 'key' => EDOA_Review_Sync::META_BEST_OVERALL, 'value' => 1 ) );
 				break;
 			case 'topic':
 				$topics = array_filter( array_map( 'trim', explode( ',', (string) $a['topic'] ) ) );
+				if ( empty( $topics ) ) {
+					return array(); // source=topic with no usable topic → nothing to show
+				}
 				$query['tax_query'] = array( array(
 					'taxonomy' => EDOA_RS_Taxonomies::TAX_TOPIC,
 					'field'    => 'slug',
@@ -80,6 +84,9 @@ class EDOA_Testimonials_Renderer {
 				break;
 			case 'service':
 				$slug = self::normalize_service_slug( (string) $a['service'] );
+				if ( '' === $slug ) {
+					return array(); // source=service with no usable slug → nothing to show
+				}
 				$query['tax_query'] = array( array(
 					'taxonomy' => EDOA_RS_Taxonomies::TAX_SERVICE,
 					'field'    => 'slug',
@@ -106,6 +113,8 @@ class EDOA_Testimonials_Renderer {
 				break;
 			case 'value':
 			default:
+				// NOTE: the meta_key join excludes posts lacking _edoa_value_score.
+				// All Airtable-synced testimonials have it (set by EDOA_Review_Sync).
 				$query['meta_key'] = EDOA_Review_Sync::META_VALUE_SCORE;
 				$query['orderby']  = 'meta_value_num';
 				$query['order']    = 'DESC';
@@ -154,7 +163,7 @@ class EDOA_Testimonials_Renderer {
 							<?php if ( $rating > 0 ) : ?>
 								<div class="edoa-tt__stars" aria-label="<?php echo esc_attr( $rating ); ?> out of 5 stars">
 									<?php for ( $i = 1; $i <= 5; $i++ ) : ?>
-										<svg width="14" height="14" viewBox="0 0 24 24" fill="<?php echo $i <= $rating ? '#CC2229' : '#e5e5e5'; ?>" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+										<svg width="14" height="14" viewBox="0 0 24 24" fill="<?php echo esc_attr( $i <= $rating ? '#CC2229' : '#e5e5e5' ); ?>" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
 									<?php endfor; ?>
 								</div>
 							<?php endif; ?>
