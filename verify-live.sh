@@ -44,17 +44,27 @@ wp eval '$n=get_posts(["post_type"=>"testimonial","numberposts"=>-1,"fields"=>"i
 echo "== Spot-check one synced post =="
 wp eval '$p = get_posts(["post_type"=>"testimonial","numberposts"=>1,"meta_key"=>"_edoa_airtable_id"]);
          if ($p){ $id=$p[0]->ID;
-           echo "rating="    . get_post_meta($id,"testimonial_rating",true) . PHP_EOL;
-           echo "loc_id="    . get_post_meta($id,"_edoa_location_id",true) . PHP_EOL;
-           echo "loc_name="  . get_post_meta($id,"_edoa_location_name",true) . PHP_EOL;
-           echo "quote_len=" . strlen((string)get_post_meta($id,"testimonial_quote",true)) . PHP_EOL;
-           echo "svc_ids="   . wp_json_encode(get_post_meta($id,"_edoa_service_ids",true)) . PHP_EOL;
+           echo "rating="     . get_post_meta($id,"testimonial_rating",true) . PHP_EOL;
+           echo "value="      . get_post_meta($id,"_edoa_value_score",true) . PHP_EOL;
+           echo "loc_id="     . get_post_meta($id,"_edoa_location_id",true) . PHP_EOL;
+           echo "quote_len="  . strlen((string)get_post_meta($id,"testimonial_quote",true)) . PHP_EOL;
+           echo "topics="     . implode(",", wp_get_object_terms($id,"edoa_topic",["fields"=>"slugs"])) . PHP_EOL;
+           echo "services="   . implode(",", wp_get_object_terms($id,"edoa_service",["fields"=>"slugs"])) . PHP_EOL;
+           echo "legacy_svc=" . (get_post_meta($id,"_edoa_service_ids",true) === "" ? "stripped" : "PRESENT(bad)") . PHP_EOL;
          } else { echo "NO synced posts found" . PHP_EOL; }'
 
 echo "== Location-match coverage =="
 wp eval '$all=get_posts(["post_type"=>"testimonial","numberposts"=>-1,"fields"=>"ids","meta_key"=>"_edoa_airtable_id"]);
          $matched=0; foreach($all as $id){ if((int)get_post_meta($id,"_edoa_location_id",true)>0) $matched++; }
          echo "matched ".$matched." / ".count($all)." synced posts to a location".PHP_EOL;'
+
+echo "== Topic/Service term coverage =="
+wp eval 'foreach(["financing","root-canals","emergency"] as $t){
+           $tax = in_array($t,["financing","emergency"],true) ? "edoa_topic" : "edoa_service";
+           $n = (new WP_Query(["post_type"=>"testimonial","posts_per_page"=>-1,"fields"=>"ids","no_found_rows"=>true,
+                 "tax_query"=>[["taxonomy"=>$tax,"field"=>"slug","terms"=>[$t]]]]))->posts;
+           echo $tax."/".$t." => ".count($n)." posts".PHP_EOL;
+         }'
 
 echo "== Cron scheduled? =="
 wp cron event list --fields=hook,next_run 2>/dev/null | grep edoa_rs_daily_sync || echo "cron NOT scheduled (re-activate plugin)"
