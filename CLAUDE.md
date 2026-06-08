@@ -41,22 +41,22 @@ The theme working tree has PRE-EXISTING uncommitted changes from UNRELATED work 
 Always `git add <explicit file>` — never `git add .`/`-A`.
 
 ## Completed (committed)
-**Plugin `feat/review-display-v2`** (off main @ 229c57e):
+**Plugin `feat/review-display-v2`** (off main @ 229c57e, HEAD @ 9435c0e):
 - Task 1 — taxonomies `edoa_topic`/`edoa_service` + activation seed. `includes/class-taxonomies.php`, `edoa-review-sync.php`. (`1d372ad`)
 - Task 2 — `EDOA_Review_Selector` quota selector (TDD, retire ranker). `includes/class-review-selector.php`, `tests/test-review-selector.php`; deleted `class-review-ranker.php`+test. (`7f6067d`, `31fe3f8`)
 - Task 3 — sync rewrite: Display-Ready filter, Value Score sort+cap 5000, Display Text/Reviewer Display, taxonomy upsert, post_date=Review Date, drop legacy meta + tag-map. `includes/class-review-sync.php`, `edoa-review-sync.php`; deleted `class-tag-service-map.php`+test. (`db820a0`, `088311f`) — **verified live: 1007 testimonials, 1007/1007 location-matched, terms populated (financing 532, root-canals 147, emergency 699).**
 - Task 4 — shared renderer + `[edoa_testimonials]` shortcode + guarded wrappers `edoa_testimonials_render()`/`edoa_testimonials_get()` + line-clamp CSS/JS. `includes/class-testimonials-renderer.php`, `edoa-review-sync.php`, `assets/testimonials.css`, `assets/testimonials.js`. (`3c6f8d1`, `ba51aee`) — **verified live: all sources work, alias works, empty-arg guard works, recent=date order works.**
+- Task 7 — `verify-live.sh` v2 spot-checks: `_edoa_value_score`, `edoa_topic`/`edoa_service` taxonomy terms, `legacy_svc=stripped`; topic/service coverage block (financing/root-canals/emergency). All pass live. (`9435c0e`)
 
-**Theme `feat/testimonials-display`** (off main @ 7c169b8):
+**Theme `feat/testimonials-display`** (off main @ 7c169b8, HEAD @ d8d8f5b):
 - Task 5 — homepage Testimonials ACF component delegates to renderer (DRY). `template-parts/acf-components/testimonials.php`. (`601f5e0`)
+- Task 6 — `single-location.php`: replaced WP_Query with `edoa_testimonials_get(source=location)`, converted `while`/`wp_reset_postdata` to `foreach`/$tid with $tid passed to `get_field()`. `single-service.php`: deleted `$test_q` block, replaced section with `edoa_testimonials_render(source=service)`; `$show_testimonials` gate preserved. `templates/acf-full.php`+`templates/acf-hybrid.php`: `edoa_pc_sections`→`edoa_hp_sections`. All linted clean. (`d8d8f5b`)
 
 ## STOPPING POINT
-About to implement **Task 6** (not started; a partial broken edit to single-location.php was reverted). All four Task 6 edits are fully specified with exact code in the plan file.
+**Task 8** (front-end browser verification + shortcode placement) — automated data-layer checks pass (verify-live.sh). Visual browser checks not yet done by Rick.
 
 ## Remaining (in order)
-- **Task 6** — theme: (1) `single-location.php` keep `edoa-loc-test-card` markup, swap selection to `edoa_testimonials_get(source=location)` — NOTE the matching `endwhile; wp_reset_postdata();` (~line 532) MUST become `endforeach;` (this is what broke the partial attempt); (2) `single-service.php` replace random `$test_q` with `edoa_testimonials_render(source=service, service=$service_slug)`, keep `$show_testimonials` gate; (3+4) `templates/acf-full.php` + `templates/acf-hybrid.php` fix `edoa_pc_sections`→`edoa_hp_sections`. Lint all 4, commit ONLY those 4.
-- **Task 7** — plugin: update `verify-live.sh` spot-checks to read taxonomies + value score + legacy-meta-stripped + topic/service coverage. Commit on plugin branch.
-- **Task 8** — front-end verify all 4 contexts (location/service/homepage/financing), place production shortcodes; check debug.log.
+- **Task 8** — browser: (a) location page → testimonials section shows location-specific cards; (b) root-canals service page → service-scoped cards + root-canals-2 alias works; (c) homepage → ACF Testimonials component renders; (d) place shortcode `[edoa_testimonials topic="financing,insurance" count="4" heading="What patients say about cost & coverage"]` on financing page; check debug.log for notices.
 - **Task 9** — push both branches. **GATED: confirm with Rick before pushing.**
 
 ## Notes
