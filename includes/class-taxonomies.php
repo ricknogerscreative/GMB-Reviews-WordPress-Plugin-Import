@@ -3,8 +3,9 @@
 
 class EDOA_RS_Taxonomies {
 
-	const TAX_TOPIC   = 'edoa_topic';
-	const TAX_SERVICE = 'edoa_service';
+	const TAX_TOPIC     = 'edoa_topic';
+	const TAX_SERVICE   = 'edoa_service';
+	const TAX_PLACEMENT = 'edoa_placement';
 
 	/** Controlled vocabularies — must match Airtable Topics/Services option names exactly. */
 	const TOPICS = array(
@@ -19,6 +20,9 @@ class EDOA_RS_Taxonomies {
 		'teeth-whitening', 'porcelain-veneers', 'dental-trauma', 'abscess-tooth',
 		'broken-chipped-teeth', 'tooth-reimplantation', 'swollen-jaw', 'dental-x-rays',
 	);
+
+	/** Editorial placement buckets for generic pages. Sync NEVER sets these — hand-curated in WP admin. */
+	const PLACEMENTS = array( 'homepage', 'landing', 'book', 'general' );
 
 	/** Register both taxonomies on the testimonial CPT. Hooked to 'init'. */
 	public static function register(): void {
@@ -37,6 +41,9 @@ class EDOA_RS_Taxonomies {
 		register_taxonomy( self::TAX_SERVICE, 'testimonial', array_merge( $common, array(
 			'label' => 'Review Services',
 		) ) );
+		register_taxonomy( self::TAX_PLACEMENT, 'testimonial', array_merge( $common, array(
+			'label' => 'Review Placement',
+		) ) );
 	}
 
 	/** Seed the known terms. Idempotent — safe to call on every activation. */
@@ -50,6 +57,11 @@ class EDOA_RS_Taxonomies {
 		foreach ( self::SERVICES as $slug ) {
 			if ( ! term_exists( $slug, self::TAX_SERVICE ) ) {
 				wp_insert_term( $slug, self::TAX_SERVICE, array( 'slug' => $slug ) );
+			}
+		}
+		foreach ( self::PLACEMENTS as $slug ) {
+			if ( ! term_exists( $slug, self::TAX_PLACEMENT ) ) {
+				wp_insert_term( $slug, self::TAX_PLACEMENT, array( 'slug' => $slug ) );
 			}
 		}
 	}
