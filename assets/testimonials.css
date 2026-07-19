@@ -13,3 +13,5 @@
 .edoa-tt__more { align-self: flex-start; background: none; border: 0; padding: 0; color: #CC2229; font: inherit; cursor: pointer; text-decoration: underline; }
 .edoa-tt__footer { margin-top: auto; display: flex; align-items: center; justify-content: space-between; gap: .75rem; }
 .edoa-tt__author { font-style: normal; font-weight: 600; }
+.edoa-tt__meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: .15rem .5rem; }
+.edoa-tt__date { color: #6b7280; font-size: .85em; }

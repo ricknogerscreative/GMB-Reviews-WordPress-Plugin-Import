@@ -23,6 +23,7 @@ class EDOA_Testimonials_Renderer {
 			'count'    => 3,
 			'orderby'  => '',
 			'ids'      => array(),
+			'placement' => '',
 		), $args );
 
 		// Pinned IDs path (manual override).
@@ -99,6 +100,17 @@ class EDOA_Testimonials_Renderer {
 					'value' => (int) $a['location'],
 				) );
 				break;
+			case 'placement':
+				$placements = self::filter_terms( (string) $a['placement'], EDOA_RS_Taxonomies::PLACEMENTS );
+				if ( empty( $placements ) ) {
+					return self::get( array_merge( $a, array( 'source' => 'best', 'placement' => '' ) ) );
+				}
+				$query['tax_query'] = array( array(
+					'taxonomy' => EDOA_RS_Taxonomies::TAX_PLACEMENT,
+					'field'    => 'slug',
+					'terms'    => $placements,
+				) );
+				break;
 		}
 
 		// Ordering: explicit orderby wins; else recent=date, everything else=value.
@@ -122,6 +134,9 @@ class EDOA_Testimonials_Renderer {
 		}
 
 		$q = new WP_Query( $query );
+		if ( 'placement' === $source && empty( $q->posts ) ) {
+			return self::get( array_merge( $a, array( 'source' => 'best', 'placement' => '' ) ) );
+		}
 		return $q->posts;
 	}
 
@@ -154,7 +169,12 @@ class EDOA_Testimonials_Renderer {
 					<?php foreach ( $ids as $id ) :
 						$quote  = (string) get_post_meta( $id, 'testimonial_quote', true );
 						$author = (string) get_post_meta( $id, 'testimonial_author', true );
-						$rating = (int) get_post_meta( $id, 'testimonial_rating', true );
+						if ( '' === $author ) {
+							$author = get_the_title( $id );
+						}
+						$rating   = (int) get_post_meta( $id, 'testimonial_rating', true );
+						$raw_date = get_post_meta( $id, 'testimonial_date', true );
+						$date     = $raw_date ? date_i18n( 'M j, Y', strtotime( (string) $raw_date ) ) : get_the_date( 'M j, Y', $id );
 						if ( '' === $quote ) {
 							continue;
 						}
@@ -168,13 +188,18 @@ class EDOA_Testimonials_Renderer {
 								</div>
 							<?php endif; ?>
 							<blockquote class="edoa-tt__quote" style="--edoa-tt-lines: <?php echo esc_attr( $length ); ?>;">
-								<p class="edoa-tt__text"><?php echo esc_html( $quote ); ?></p>
+								<p class="edoa-tt__text"><?php echo wp_kses_post( $quote ); ?></p>
 							</blockquote>
 							<button type="button" class="edoa-tt__more" hidden>Read more</button>
 							<div class="edoa-tt__footer">
-								<?php if ( $author !== '' ) : ?>
-									<cite class="edoa-tt__author"><?php echo esc_html( $author ); ?></cite>
-								<?php endif; ?>
+								<div class="edoa-tt__meta">
+									<?php if ( $author !== '' ) : ?>
+										<cite class="edoa-tt__author"><?php echo esc_html( $author ); ?></cite>
+									<?php endif; ?>
+									<?php if ( $date !== '' ) : ?>
+										<span class="edoa-tt__date"><?php echo esc_html( $date ); ?></span>
+									<?php endif; ?>
+								</div>
 								<a href="<?php echo esc_url( $cta_url ); ?>" class="edoa-btn edoa-btn--red edoa-btn--sm">Schedule</a>
 							</div>
 						</div>
@@ -197,6 +222,7 @@ class EDOA_Testimonials_Renderer {
 			'heading'  => '',
 			'length'   => 8,
 			'orderby'  => '',
+			'placement' => '',
 		), $atts, 'edoa_testimonials' );
 		return self::render( $atts );
 	}
@@ -207,6 +233,26 @@ class EDOA_Testimonials_Renderer {
 
 	private static function normalize_service_slug( string $slug ): string {
 		return self::SERVICE_SLUG_ALIASES[ $slug ] ?? $slug;
+	}
+
+	/**
+	 * Validate a comma-separated term list against an allowed vocabulary.
+	 * Pure — no WP calls. Trims, drops empties + unknowns, de-dupes, preserves order.
+	 *
+	 * @param string   $csv     e.g. "homepage, book"
+	 * @param string[] $allowed controlled vocabulary
+	 * @return string[]
+	 */
+	public static function filter_terms( string $csv, array $allowed ): array {
+		$allow = array_flip( $allowed );
+		$out   = array();
+		foreach ( explode( ',', $csv ) as $t ) {
+			$t = trim( $t );
+			if ( '' !== $t && isset( $allow[ $t ] ) && ! in_array( $t, $out, true ) ) {
+				$out[] = $t;
+			}
+		}
+		return $out;
 	}
 
 	public static function register_assets(): void {
