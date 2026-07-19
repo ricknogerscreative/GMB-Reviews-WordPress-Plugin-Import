@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name: EDOA Review Sync
- * Description: Nightly sync of curated 4-5 star text reviews from Airtable into the testimonial CPT.
- * Version: 1.0.0
+ * Description: Syncs curated 4-5 star text reviews from Airtable into the testimonial CPT every 45 days; context-aware display (location/service/topic/placement) via the [edoa_testimonials] shortcode + shared renderer.
+ * Version: 2.1.0
  * Author: EDOA
  */
 
@@ -10,7 +10,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'EDOA_RS_VERSION', '1.0.0' );
+define( 'EDOA_RS_VERSION', '2.1.0' );
 define( 'EDOA_RS_DIR', plugin_dir_path( __FILE__ ) );
 define( 'EDOA_RS_CRON_HOOK', 'edoa_rs_sync' );
 define( 'EDOA_RS_PLUGIN_FILE', __FILE__ );
