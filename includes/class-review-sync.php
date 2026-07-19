@@ -50,12 +50,16 @@ class EDOA_Review_Sync {
 		$raw     = $client->fetch_all( 'Reviews', $params );
 		$reviews = array();
 		foreach ( $raw as $rec ) {
-			$f       = self::trim_keys( $rec['fields'] ?? array() );
+			$f     = self::trim_keys( $rec['fields'] ?? array() );
+			$stars = (int) ( $f['Stars'] ?? 0 );
+			if ( $stars < 4 ) {
+				continue; // safety net atop Airtable "Display Ready" — only 4-5★ ever display
+			}
 			$linkIds = $f['Location'] ?? array();
 			$locKey  = is_array( $linkIds ) && $linkIds ? $linkIds[0] : '';
 			$reviews[] = array(
 				'id'           => (string) ( $f['Review ID'] ?? $rec['id'] ),
-				'stars'        => (int) ( $f['Stars'] ?? 0 ),
+				'stars'        => $stars,
 				'value'        => (float) ( $f['Value Score'] ?? 0 ),
 				'date'         => (string) ( $f['Review Date'] ?? '' ),
 				'display_text' => (string) ( $f['Display Text'] ?? '' ),
@@ -123,13 +127,11 @@ class EDOA_Review_Sync {
 			'post_title'  => $r['reviewer'] !== '' ? $r['reviewer'] : ( 'Review ' . $r['id'] ),
 		);
 		// Use Review Date as post_date so orderby=date reflects recency (indexed, no meta sort).
-		if ( $r['date'] !== '' ) {
-			$ts = strtotime( $r['date'] );
-			if ( $ts ) {
-				$ts = min( $ts, time() ); // never future-date a published testimonial (would become status 'future')
-				$postarr['post_date']     = gmdate( 'Y-m-d H:i:s', $ts );
-				$postarr['post_date_gmt'] = gmdate( 'Y-m-d H:i:s', $ts );
-			}
+		$ts = ( $r['date'] !== '' ) ? strtotime( $r['date'] ) : false;
+		if ( $ts ) {
+			$ts = min( $ts, time() ); // never future-date a published testimonial (would become status 'future')
+			$postarr['post_date']     = gmdate( 'Y-m-d H:i:s', $ts );
+			$postarr['post_date_gmt'] = gmdate( 'Y-m-d H:i:s', $ts );
 		}
 		if ( $postId ) {
 			$postarr['ID'] = $postId;
@@ -145,6 +147,9 @@ class EDOA_Review_Sync {
 		update_post_meta( $postId, 'testimonial_quote', $r['display_text'] );
 		update_post_meta( $postId, 'testimonial_author', $r['reviewer'] );
 		update_post_meta( $postId, 'testimonial_rating', $r['stars'] );
+		if ( $ts ) {
+			update_post_meta( $postId, 'testimonial_date', gmdate( 'Ymd', $ts ) ); // matches ACF date_picker return_format
+		}
 		if ( $locPostId ) {
 			update_post_meta( $postId, 'testimonial_location', $locPostId );
 		}
