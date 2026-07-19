@@ -48,6 +48,7 @@ wp eval '$p = get_posts(["post_type"=>"testimonial","numberposts"=>1,"meta_key"=
            echo "value="      . get_post_meta($id,"_edoa_value_score",true) . PHP_EOL;
            echo "loc_id="     . get_post_meta($id,"_edoa_location_id",true) . PHP_EOL;
            echo "quote_len="  . strlen((string)get_post_meta($id,"testimonial_quote",true)) . PHP_EOL;
+           echo "date="      . get_post_meta($id,"testimonial_date",true) . PHP_EOL;
            echo "topics="     . implode(",", wp_get_object_terms($id,"edoa_topic",["fields"=>"slugs"])) . PHP_EOL;
            echo "services="   . implode(",", wp_get_object_terms($id,"edoa_service",["fields"=>"slugs"])) . PHP_EOL;
            echo "legacy_svc=" . (get_post_meta($id,"_edoa_service_ids",true) === "" ? "stripped" : "PRESENT(bad)") . PHP_EOL;
@@ -66,7 +67,12 @@ wp eval 'foreach(["financing","root-canals","emergency"] as $t){
            echo $tax."/".$t." => ".count($n)." posts".PHP_EOL;
          }'
 
+echo "== Placement taxonomy + seeded terms =="
+wp eval 'echo taxonomy_exists("edoa_placement") ? "edoa_placement registered".PHP_EOL : "edoa_placement MISSING".PHP_EOL;
+         $t=get_terms(["taxonomy"=>"edoa_placement","hide_empty"=>false,"fields"=>"slugs"]);
+         echo "placement terms: ".(is_array($t)&&$t?implode(",",$t):"none").PHP_EOL;'
+
 echo "== Cron scheduled? =="
-wp cron event list --fields=hook,next_run 2>/dev/null | grep edoa_rs_daily_sync || echo "cron NOT scheduled (re-activate plugin)"
+wp cron event list --fields=hook,next_run,schedule 2>/dev/null | grep edoa_rs_sync || echo "cron NOT scheduled (re-activate plugin)"
 
 echo "== Done =="
